@@ -6,11 +6,11 @@ import signal
 import cPickle as pickle
 import os.path
 
-sockets_list = [0]
+sockets_list = [0, 1]
 number_of_cos = 8
 cos = []
 cores = []
-
+number_of_cores = 16
 
 def signal_handler(signal, frame):
     sys.exit(0)
@@ -57,13 +57,13 @@ def print_cur_config():
         for i in range(0,number_of_cos):
             print("L3CA COS%d => MASK %s" %(i,cos[socket][i]))
         print("Core information for socket %d:" %socket)
-        for i in range(0,22):
+        for i in range(0,number_of_cores):
             print("Core %d => COS%d, RMID0" %(i,int(cores[i])));
 
 
 def reset_cos():
     global cos, cores
-    for i in range(0,22):
+    for i in range(0,number_of_cores):
         cores[i] = 0
     pickle.dump(cores, open("cos_core.p", "wb"))
     for socket in sockets_list:
@@ -134,14 +134,15 @@ def main():
         cos = pickle.load(open("cos_mask.p", "rb"))
     else:
         cos.append([])
+        cos.append([])
         for socket in sockets_list:
             for i in range(0,8):
-                cos[0].append("0xfffff")
+                cos[socket].append("0xfffff")
 
     if os.path.isfile("cos_core.p"):
         cores = pickle.load(open("cos_core.p", "rb"))
     else:
-        for i in range(0,22):
+        for i in range(0, 2 * number_of_cores):
             cores.append(0)
 
     signal.signal(signal.SIGINT, signal_handler)
