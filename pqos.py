@@ -6,7 +6,7 @@ import signal
 import cPickle as pickle
 import os.path
 
-sockets_list = [0,1]
+sockets_list = [0]
 number_of_cos = 8
 cos = []
 cores = []
@@ -55,7 +55,7 @@ def print_cur_config():
     for socket in sockets_list:
         print("L3CA COS definitions for Socket %d:" %socket)
         for i in range(0,number_of_cos):
-            print("L3CA COS%d => MASK %s" %(i,cos[i][socket]))
+            print("L3CA COS%d => MASK %s" %(i,cos[socket][i]))
         print("Core information for socket %d:" %socket)
         for i in range(0,22):
             print("Core %d => COS%d, RMID0" %(i,int(cores[i])));
@@ -66,9 +66,9 @@ def reset_cos():
     for i in range(0,22):
         cores[i] = 0
     pickle.dump(cores, open("cos_core.p", "wb"))
-    for socket in list_of_sockets:
+    for socket in sockets_list:
         for i in range(0,8):
-            cos[i][socket] = "0xfffff"
+            cos[socket][i] = "0xfffff"
     pickle.dump(cos, open("cos_mask.p", "wb"))
     print("NOTE:  Mixed use of MSR and kernel interfaces to manage");
     print("       CAT or CMT & MBM may lead to unexpected behavior.")
@@ -104,15 +104,27 @@ def change_mask():
     global cos
     new_config = sys.argv[2].strip('"');
     splitted = new_config.split(";")
+    print("splitted =", splitted)
     if len(splitted)> 1:
         splitted = splitted[:-1]
     for config in splitted:
-        splitted_config = config.strip('llc')
-        cos_number = splitted_config.strip(":").split("=")[0]
-        mask = splitted_config.strip(":").split("=")[1]
-        base1 = mask.strip("0x")
-        base2 = base1.strip("0")
-        cos[int(cos_number)][0] = "0x" + base2
+        if '@' in config:
+            splitted_config = config.strip('llc@')
+            print(splitted_config)
+            socket_id = splitted_config.split(':')[0]
+            rest = splitted_config.split(':')[1]
+            cos_number = rest.strip(":").split("=")[0]
+            mask = rest.strip(":").split("=")[1]
+            base1 = mask.strip("0x")
+            base2 = base1.strip("0")
+            cos[int(socket_id)][int(cos_number)] = "0x" + base2
+        else:
+            splitted_config = config.strip('llc')
+            cos_number = splitted_config.strip(":").split("=")[0]
+            mask = splitted_config.strip(":").split("=")[1]
+            base1 = mask.strip("0x")
+            base2 = base1.strip("0")
+            cos[0][int(cos_number)] = "0x" + base2
     pickle.dump(cos, open("cos_mask.p", "wb"))
 
 
@@ -121,9 +133,10 @@ def main():
     if os.path.isfile("cos_mask.p"):
         cos = pickle.load(open("cos_mask.p", "rb"))
     else:
-        for socket in list_of_sockets:
+        cos.append([])
+        for socket in sockets_list:
             for i in range(0,8):
-                cos[i][socket] = "0xfffff"
+                cos[0].append("0xfffff")
 
     if os.path.isfile("cos_core.p"):
         cores = pickle.load(open("cos_core.p", "rb"))
