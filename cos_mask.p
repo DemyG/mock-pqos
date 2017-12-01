@@ -1,0 +1,12 @@
+(lp1
+S'0xfffff'
+p2
+ag2
+aS'0xffe'
+p3
+ag2
+ag2
+ag2
+ag2
+ag2
+a.
