@@ -2,12 +2,14 @@
 (lp2
 S'0xfffff'
 p3
+aS'0xfff0'
+p4
+aS'0xc00'
+p5
 ag3
 ag3
 ag3
 ag3
 ag3
-ag3
-ag3
-aa(lp4
+aa(lp6
 a.

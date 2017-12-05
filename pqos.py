@@ -11,6 +11,7 @@ number_of_cos = 8
 cos = []
 cores = []
 number_of_cores = 4
+default_cat = "0xfffff"
 
 def signal_handler(signal, frame):
     sys.exit(0)
@@ -73,7 +74,7 @@ def reset_cos():
     pickle.dump(cores, open("cos_core.p", "wb"))
     for socket in sockets_list:
         for i in range(0, number_of_cos):
-            cos[socket][i] = "0xfffff"
+            cos[socket][i] = default_cat
     pickle.dump(cos, open("cos_mask.p", "wb"))
     print("NOTE:  Mixed use of MSR and kernel interfaces to manage");
     print("       CAT or CMT & MBM may lead to unexpected behavior.")
@@ -90,7 +91,7 @@ def change_cos():
         class_of_ser = splitted_config.strip(":").split("=")[0]
         list_of_cores = splitted_config.strip(":").split("=")[1]
         for core in list_of_cores.split(","):
-            if len(core) == 1:
+            if len(core) == 1 and "-" not in core:
                 cores[int(core)] = class_of_ser
             else:
                 mini = core.split("-")[0]
@@ -115,15 +116,15 @@ def change_mask():
             rest = splitted_config.split(':')[1]
             cos_number = rest.strip(":").split("=")[0]
             mask = rest.strip(":").split("=")[1]
-            base1 = mask.strip("0x")
-            base2 = base1.strip("0")
+            base1 = mask.lstrip("0x")
+            base2 = base1.lstrip("0") or '0'
             cos[int(socket_id)][int(cos_number)] = "0x" + base2
         else:
             splitted_config = config.strip('llc')
             cos_number = splitted_config.strip(":").split("=")[0]
             mask = splitted_config.strip(":").split("=")[1]
-            base1 = mask.strip("0x")
-            base2 = base1.strip("0")
+            base1 = mask.lstrip("0x")
+            base2 = base1.lstrip("0") or '0'
             cos[0][int(cos_number)] = "0x" + base2
     pickle.dump(cos, open("cos_mask.p", "wb"))
 
@@ -137,7 +138,7 @@ def main():
         cos.append([])
         for socket in sockets_list:
             for i in range(0,number_of_cos):
-                cos[socket].append("0xfffff")
+                cos[socket].append(default_cat)
 
     if os.path.isfile("cos_core.p"):
         cores = pickle.load(open("cos_core.p", "rb"))
