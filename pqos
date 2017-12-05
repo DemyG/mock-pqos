@@ -107,8 +107,8 @@ def change_mask():
     global cos
     new_config = sys.argv[2].strip('"');
     splitted = new_config.split(";")
-    if len(splitted)> 1:
-        splitted = splitted[:-1]
+    #if len(splitted)> 1:
+    #    splitted = splitted[:-1]
     for config in splitted:
         if '@' in config:
             splitted_config = config.strip('llc@')
