@@ -82,16 +82,13 @@ def reset_cos():
 def change_cos():
     global cores
     new_config = sys.argv[2].strip('"');
-    print(new_config)
     splitted = new_config.split(";")
-    splitted = splitted[:-1]
-    print(splitted)
+    if len(splitted)> 1:
+        splitted = splitted[:-1]
     for config in splitted:
         splitted_config = config.strip('llc')
-        print(splitted_config)
         class_of_ser = splitted_config.strip(":").split("=")[0]
         list_of_cores = splitted_config.strip(":").split("=")[1]
-        print(class_of_ser, list_of_cores.split(","))
         for core in list_of_cores.split(","):
             if len(core) == 1:
                 cores[int(core)] = class_of_ser
@@ -109,13 +106,11 @@ def change_mask():
     global cos
     new_config = sys.argv[2].strip('"');
     splitted = new_config.split(";")
-    print("splitted =", splitted)
     if len(splitted)> 1:
         splitted = splitted[:-1]
     for config in splitted:
         if '@' in config:
             splitted_config = config.strip('llc@')
-            print(splitted_config)
             socket_id = splitted_config.split(':')[0]
             rest = splitted_config.split(':')[1]
             cos_number = rest.strip(":").split("=")[0]
