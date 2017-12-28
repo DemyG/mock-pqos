@@ -9,26 +9,19 @@ import ast
 import cPickle as pickle
 import output_maker
 
-<<<<<<< HEAD
 number_of_sockets = []
 coresIDs_in_each_socket = []
-=======
-sockets_list = []
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
 number_of_cos = 0
 cos = []
 cores = []
 number_of_cores = 0
 number_of_ways = 0
 default_cat = ""
-<<<<<<< HEAD
 l3bytes = 0 
 contention_bitmask = ""
 forbidden_mask = ""
 directory_of_conf_file = "/home/demy/dc-agent/fake-pqos"
 
-=======
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
 
 def signal_handler(_0, _1):
     sys.exit(0)
@@ -79,21 +72,13 @@ def print_help_message():
 def print_metrics():
     global number_of_sockets, number_of_cores, directory_of_conf_file
     os.system('clear')
-<<<<<<< HEAD
     with open("%s/sample1_cmt_output.txt" % directory_of_conf_file, "r") as fread:
-=======
-    with open("sample1_cmt_output.txt", "r") as fread:
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
         t1 = time.time()
         count = 1
         while True:
             waiting = 1
             for line in fread:
-<<<<<<< HEAD
                 if count % (number_of_cores*number_of_sockets + 1) != 0:
-=======
-                if count % (number_of_cores*len(sockets_list)+1) != 0:
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
                     sys.stdout.write(line)
                     count = count + 1
                 else:
@@ -109,7 +94,6 @@ def print_metrics():
                     time.sleep(1.0 - (t2-t1))
                     t1 = time.time()
                     os.system('clear')
-<<<<<<< HEAD
                     # sys.stdout.write("\033[F")
                     # sys.stdout.write("\033[K")
 
@@ -127,26 +111,10 @@ def print_current_config():
         for core_id in coresIDs_in_each_socket[socket]:
             print("Core %d => COS%d, RMID0" % (core_id, int(cores[socket][j])))
             j = j + 1
-=======
-                    #sys.stdout.write("\033[F")
-                    #sys.stdout.write("\033[K")
-
-
-def print_cur_config():
-    global cos, cores, sockets_list, number_of_cos, number_of_cores
-    for socket in sockets_list:
-        print("L3CA COS definitions for Socket %d:" %socket)
-        for i in range(0,number_of_cos):
-            print("L3CA COS%d => MASK %s" %(i,cos[socket][i]))
-        print("Core information for socket %d:" %socket)
-        for i in range(0,number_of_cores):
-            print("Core %d => COS%d, RMID0" %(number_of_cores*socket + i,int(cores[socket][i])))
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
     print("NOTE:  Mixed use of MSR and kernel interfaces to manage")
     print("       CAT or CMT & MBM may lead to unexpected behavior.")
     print("INFO: Monitoring capability detected")
     print("INFO: CPUID.0x7.0: CAT supported")
-<<<<<<< HEAD
     print(
           "INFO: L3 CAT details: CDP support=0, CDP on=0, #COS=%s,"
           " #ways=%s, ways contention bit-mask %s"
@@ -154,11 +122,6 @@ def print_cur_config():
            )
     print("INFO: L3 CAT details: cache size %s bytes, %s ways" % (l3bytes, number_of_ways))
     print("INFO: LLC cache way size %s bytes" % l3bytes)
-=======
-    print("INFO: L3 CAT details: CDP support=0, CDP on=0, #COS=%s, #ways=%s, ways contention bit-mask 0xc00" %(number_of_cos, number_of_ways))
-    print("INFO: L3 CAT details: cache size 9437184 bytes, %s ways" %number_of_ways)
-    print("INFO: LLC cache way size 786432 bytes")
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
     print("INFO: L3CA capability detected")
     print("INFO: Detected PID API (perf) support for LLC Occupancy")
     print("INFO: Detected PID API (perf) support for Instructions/Cycles")
@@ -166,13 +129,8 @@ def print_cur_config():
     
 
 def reset_cos():
-<<<<<<< HEAD
     global cos, cores, number_of_sockets
     for socket in range(number_of_sockets):
-=======
-    global cos, cores
-    for socket in sockets_list:
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
         for i in range(0, number_of_cores):
             cores[socket][i] = 0
     pickle.dump(cores, open("cos_core.p", "wb"))
@@ -199,7 +157,6 @@ def make_list(str_group):
 
 
 def change_cos():
-<<<<<<< HEAD
     # TODO: re-write it if need be
     global cores, number_of_cores, number_of_sockets, coresIDs_in_each_socket
     new_config = sys.argv[2].strip('"')
@@ -234,35 +191,6 @@ def change_cos():
                     if each_core == core:
                         cores[socket_id][int(j)] = class_of_ser
                         break
-=======
-    global cores, number_of_cores, sockets_list
-    new_config = sys.argv[2].strip('"');
-    splitted = new_config.split(";")
-    if len(splitted)> 1:
-        splitted = splitted[:-1]
-    for config in splitted:
-        splitted_config = config.strip('llc')
-        class_of_ser = splitted_config.strip(":").split("=")[0]
-        list_of_cores = splitted_config.strip(":").split("=")[1]
-        # find the socket in which the core belongs
-        socket_id = 0 
-        for socket in sockets_list:
-            i = 1
-            for core in cores[socket]:
-                if int(list_of_cores.split("-")[0]) == int(number_of_cores*socket + i - 1):
-                    socket_id = socket
-                    break
-                i = i + 1
-        for core in list_of_cores.split(","):
-            if len(core) == 1 and "-" not in core:
-                core = int(core) - socket_id * number_of_cores
-                cores[socket_id][int(core)] = class_of_ser
-            else:
-                mini = int(core.split("-")[0]) - socket_id * number_of_cores
-                maxi = int(core.split("-")[1]) - socket_id * number_of_cores
-                for i in range(int(mini), int(maxi) + 1):
-                    cores[socket_id][int(i)] = class_of_ser
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
 
     pickle.dump(cores, open("cos_core.p", "wb"))
 
@@ -307,7 +235,6 @@ def change_mask():
 
 
 def main():
-<<<<<<< HEAD
     global cos, cores, number_of_sockets, default_cat, number_of_ways,\
            number_of_cores, number_of_cos, coresIDs_in_each_socket,\
            l3bytes, contention_bitmask, directory_of_conf_file
@@ -352,49 +279,6 @@ def main():
         cos = pickle.load(open("cos_mask.p", "rb"))
     if os.path.isfile("cos_core.p"):
         cores = pickle.load(open("cos_core.p", "rb"))
-=======
-    global cos, cores, sockets_list, default_cat, number_of_ways, number_of_cores, number_of_cos
-    with open("topology_config", "r") as fread:
-        for i, line in enumerate(fread, 1):
-            num = line.split(":")[1]
-            topo_char = line.split(":")[0]
-            if i == 1:
-                sockets_list = [x for x in range(int(num))]
-            elif i == 2:
-                cores.append([])
-                cores.append([])
-                for socket in sockets_list:
-                    for x in range(int(num)):
-                        cores[socket].append(0)
-                number_of_cores = int(num)
-            elif i == 4:
-                cos.append([])
-                cos.append([])
-                for socket in sockets_list:
-                    for x in range(int(num)):
-                        cos[socket].append(default_cat)
-                number_of_cos = int(num)
-            elif i == 3:
-                default_cat = num.rstrip()
-            else:
-                number_of_ways = int(num)
-    fread.close()
-            
-    if os.path.isfile("cos_mask.p"):
-        cos = pickle.load(open("cos_mask.p", "rb"))
-#    else:
-#        cos.append([])
-#        cos.append([])
-#        for socket in sockets_list:
-#            for i in range(0,number_of_cos):
-#                cos[socket].append(default_cat)
-#
-    if os.path.isfile("cos_core.p"):
-        cores = pickle.load(open("cos_core.p", "rb"))
-#    else:
-#        for i in range(0, 2 * number_of_cores):
-#            cores.append(0)
->>>>>>> 8960210eff3af3dd883c11b37da39f82e1e345e3
 
     signal.signal(signal.SIGINT, signal_handler)
 
