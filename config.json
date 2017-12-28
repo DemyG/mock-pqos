@@ -1,0 +1,12 @@
+{
+    "sockets": {
+        "0": "[0,1,2,3,4,5,6,7]"
+    },
+    "l3cat": {
+        "num_clos": "8",
+        "num_ways": "20",
+        "total_cache_ways": "0xfffff",
+        "contention_mask": "0xc0000",
+        "cache_bytes" : "34603008"
+    }
+}

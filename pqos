@@ -1,31 +1,84 @@
 #!/usr/bin/env python
+
 import time
 import sys
 import os
 import signal
+import json
+import ast
 import cPickle as pickle
-import os.path
+import output_maker
 
-sockets_list = [0]
-number_of_cos = 8
+number_of_sockets = []
+coresIDs_in_each_socket = []
+number_of_cos = 0
 cos = []
 cores = []
-number_of_cores = 4
-default_cat = "0xfffff"
+number_of_cores = 0
+number_of_ways = 0
+default_cat = ""
+l3bytes = 0 
+contention_bitmask = ""
+forbidden_mask = ""
+directory_of_conf_file = "/home/demy/dc-agent/fake-pqos"
 
-def signal_handler(signal, frame):
+
+def signal_handler(_0, _1):
     sys.exit(0)
 
 
+def violation_contention_bitmask(hex_mask):
+    if hex_mask == forbidden_mask:
+        return True
+    return False
+
+
+def find_forbidden_mask():
+    global contention_bitmask, number_of_ways, forbidden_mask
+    base = 0x1
+    for i in range(number_of_ways-1):
+        base = base << 1
+    forbidden_mask = hex(base)
+
+
+def is_valid(hex_number):
+    global default_cat
+    max_mask = int(default_cat, 16)
+    int_mask = int(hex_number, 16)
+    if max_mask < int_mask:
+        print("ERROR: WRMSR failed for reg[0xc91] <- value[%s]" % default_cat)
+        return False
+    if "0" in bin(int_mask).strip('0b'):
+        print("ERROR: bit mask is not contiguous!") 
+        return False
+    return True
+    
+
+def print_help_message():
+    print("NOTE:  Mixed use of MSR and kernel interfaces to manage")
+    print("       CAT or CMT & MBM may lead to unexpected behavior.")
+    print("Description:")
+    print("  -h             help page")
+    print("  -sv            show current PQoS configuration (verbose mode)")
+    print("  -e CLASSDEF    define allocation classes")
+    print("                 CLASSDEF format is 'TYPE:ID=DEFINITION;'")
+    print("                 Examples: 'llc:0=0xffff;llc:1=0x00ff'")
+    print("  -a CLASS2ID    associate cores/tasks with an allocation class")
+    print("                 CLASS2ID format is 'TYPE:ID=CORE_LIST/TASK_LIST;'")
+    print("                 Examples: 'llc:0=0,2,3,4;llc:1=1,10-12'")
+    print("  -R             reset allocation configuration (L2/L3 CAT & MBA)")
+
+
 def print_metrics():
+    global number_of_sockets, number_of_cores, directory_of_conf_file
     os.system('clear')
-    with open("file.txt", "r") as fread:
+    with open("%s/sample1_cmt_output.txt" % directory_of_conf_file, "r") as fread:
         t1 = time.time()
-        count = 1;
+        count = 1
         while True:
             waiting = 1
             for line in fread:
-                if count % 9 != 0:
+                if count % (number_of_cores*number_of_sockets + 1) != 0:
                     sys.stdout.write(line)
                     count = count + 1
                 else:
@@ -35,130 +88,214 @@ def print_metrics():
             else:
                 fread.seek(0)
                 waiting = 0
-            if (waiting):
+            if waiting:
                 t2 = time.time()
                 if t2-t1 < 1.0:
                     time.sleep(1.0 - (t2-t1))
                     t1 = time.time()
                     os.system('clear')
-                    #sys.stdout.write("\033[F")
-                    #sys.stdout.write("\033[K")
+                    # sys.stdout.write("\033[F")
+                    # sys.stdout.write("\033[K")
 
 
-def print_cur_config():
-    global cos, cores
-    for socket in sockets_list:
-        print("L3CA COS definitions for Socket %d:" %socket)
-        for i in range(0,number_of_cos):
-            print("L3CA COS%d => MASK %s" %(i,cos[socket][i]))
-        print("Core information for socket %d:" %socket)
-        for i in range(0,number_of_cores):
-            print("Core %d => COS%d, RMID0" %(i,int(cores[i])))
+def print_current_config():
+    global cos, cores, number_of_sockets, number_of_cos, number_of_cores,\
+           coresIDs_in_each_socket, l3bytes, contention_bitmask
+    
+    for socket in range(number_of_sockets):
+        print("L3CA COS definitions for Socket %d:" % socket)
+        for i in range(0, number_of_cos):
+            print("L3CA COS%d => MASK %s" % (i, cos[socket][i]))
+        print("Core information for socket %d:" % socket)
+        j = 0
+        for core_id in coresIDs_in_each_socket[socket]:
+            print("Core %d => COS%d, RMID0" % (core_id, int(cores[socket][j])))
+            j = j + 1
     print("NOTE:  Mixed use of MSR and kernel interfaces to manage")
-    print("CAT or CMT & MBM may lead to unexpected behavior.")
+    print("       CAT or CMT & MBM may lead to unexpected behavior.")
     print("INFO: Monitoring capability detected")
     print("INFO: CPUID.0x7.0: CAT supported")
-    print("INFO: L3 CAT details: CDP support=0, CDP on=0, #COS=8, #ways=20, ways contention bit-mask 0xc00")
-    print("INFO: L3 CAT details: cache size 9437184 bytes, 20 ways")
-    print("INFO: LLC cache way size 786432 bytes")
+    print(
+          "INFO: L3 CAT details: CDP support=0, CDP on=0, #COS=%s,"
+          " #ways=%s, ways contention bit-mask %s"
+          % (number_of_cos, number_of_ways, contention_bitmask)
+           )
+    print("INFO: L3 CAT details: cache size %s bytes, %s ways" % (l3bytes, number_of_ways))
+    print("INFO: LLC cache way size %s bytes" % l3bytes)
     print("INFO: L3CA capability detected")
     print("INFO: Detected PID API (perf) support for LLC Occupancy")
     print("INFO: Detected PID API (perf) support for Instructions/Cycles")
     print("INFO: Detected PID API (perf) support for LLC Misses")
-
+    
 
 def reset_cos():
-    global cos, cores
-    for i in range(0, number_of_cores):
-        cores[i] = 0
+    global cos, cores, number_of_sockets
+    for socket in range(number_of_sockets):
+        for i in range(0, number_of_cores):
+            cores[socket][i] = 0
     pickle.dump(cores, open("cos_core.p", "wb"))
-    for socket in sockets_list:
+    for socket in range(number_of_sockets):
         for i in range(0, number_of_cos):
             cos[socket][i] = default_cat
     pickle.dump(cos, open("cos_mask.p", "wb"))
-    print("NOTE:  Mixed use of MSR and kernel interfaces to manage");
+    os.remove("%s/cos_mask.p" % directory_of_conf_file)
+    os.remove("%s/cos_core.p" % directory_of_conf_file)
+    print("NOTE:  Mixed use of MSR and kernel interfaces to manage")
     print("       CAT or CMT & MBM may lead to unexpected behavior.")
 
 
+def make_list(str_group):
+    list_to_ret = []
+    if len(str_group) != 1:
+        start = int(str_group.split("-")[0])
+        end = int(str_group.split("-")[1])
+        for i in range(start, end+1, 1):
+            list_to_ret.append(i)
+    else:
+        list_to_ret.append(int(str_group[0]))
+    return list_to_ret
+
+
 def change_cos():
-    global cores
-    new_config = sys.argv[2].strip('"');
-    splitted = new_config.split(";")
-    if len(splitted)> 1:
-        splitted = splitted[:-1]
-    for config in splitted:
-        splitted_config = config.strip('llc')
-        class_of_ser = splitted_config.strip(":").split("=")[0]
-        list_of_cores = splitted_config.strip(":").split("=")[1]
-        for core in list_of_cores.split(","):
-            if len(core) == 1 and "-" not in core:
-                cores[int(core)] = class_of_ser
-            else:
-                mini = core.split("-")[0]
-                maxi = core.split("-")[1]
-                for i in range(int(mini), int(maxi) + 1):
-                    cores[int(i)] = class_of_ser
+    # TODO: re-write it if need be
+    global cores, number_of_cores, number_of_sockets, coresIDs_in_each_socket
+    new_config = sys.argv[2].strip('"')
+    different_configurations = new_config.split(";")
+    # if len(different_configurations) > 1:
+    #     different_configurations = different_configurations[:-1]
+    for config in different_configurations:
+        actual_config = config.strip('llc')
+        class_of_ser = actual_config.strip(":").split("=")[0]
+        list_of_cores = actual_config.strip(":").split("=")[1]
+        cores_list = list_of_cores.split(",")
+        for cores_groups in cores_list:
+            # find the socket in which the core belongs
+            socket_id = -1
+            for socket in range(number_of_sockets):
+                i = 1
+                for core in coresIDs_in_each_socket[socket]:
+                    list_cores_group = make_list(cores_groups)
+                    if int(cores_groups.split("-")[0]) == core:
+                        socket_id = socket
+                        break
+                    i = i + 1
+            if socket_id == -1 or len(list_cores_group) != 1 and\
+                int(cores_groups.split("-")[1]) not in coresIDs_in_each_socket[socket]:
+                print("ERROR: Not such core")
+                return
+
+            for each_core in list_cores_group:
+                j = -1
+                for core in coresIDs_in_each_socket[socket_id]:
+                    j = j + 1
+                    if each_core == core:
+                        cores[socket_id][int(j)] = class_of_ser
+                        break
 
     pickle.dump(cores, open("cos_core.p", "wb"))
 
 
 def change_mask():
-
     global cos
-    new_config = sys.argv[2].strip('"');
-    splitted = new_config.split(";")
-    #if len(splitted)> 1:
-    #    splitted = splitted[:-1]
-    for config in splitted:
+    new_config = sys.argv[2].strip('"')
+    different_configurations = new_config.split(";")
+
+    for config in different_configurations:
         if '@' in config:
-            splitted_config = config.strip('llc@')
-            socket_id = splitted_config.split(':')[0]
-            rest = splitted_config.split(':')[1]
+            actual_config = config.lstrip('llc@')
+            socket_id = actual_config.split(':')[0]
+            rest = actual_config.split(':')[1]
             cos_number = rest.strip(":").split("=")[0]
             mask = rest.strip(":").split("=")[1]
             base1 = mask.lstrip("0x")
             base2 = base1.lstrip("0") or '0'
-            cos[int(socket_id)][int(cos_number)] = "0x" + base2
+            if is_valid(mask):
+                if violation_contention_bitmask(mask):
+                    cos[int(socket_id)][int(cos_number)] = contention_bitmask
+                else:
+                    cos[int(socket_id)][int(cos_number)] = "0x" + base2
+            else:
+                print("Allocation configuration FAILED!")
         else:
-            splitted_config = config.strip('llc')
-            cos_number = splitted_config.strip(":").split("=")[0]
-            mask = splitted_config.strip(":").split("=")[1]
+            actual_config = config.lstrip('llc')
+            cos_number = actual_config.strip(":").split("=")[0]
+            mask = actual_config.strip(":").split("=")[1]
             base1 = mask.lstrip("0x")
             base2 = base1.lstrip("0") or '0'
-            cos[0][int(cos_number)] = "0x" + base2
+            if is_valid(mask):
+                if violation_contention_bitmask(mask):
+                    for socket_id in range(number_of_sockets):
+                        cos[socket_id][int(cos_number)] = contention_bitmask
+                else:
+                    for socket_id in range(number_of_sockets):
+                        cos[socket_id][int(cos_number)] = "0x" + base2
+            else:
+                print("Allocation configuration FAILED!")
     pickle.dump(cos, open("cos_mask.p", "wb"))
 
 
 def main():
-    global cos, cores
+    global cos, cores, number_of_sockets, default_cat, number_of_ways,\
+           number_of_cores, number_of_cos, coresIDs_in_each_socket,\
+           l3bytes, contention_bitmask, directory_of_conf_file
+    
+    # retrieve configuration info from config.json file
+    configuration_info = json.load(open("%s/config.json" % directory_of_conf_file))
+    number_of_sockets = len(configuration_info["sockets"].keys())
+    number_of_cos = int(configuration_info["l3cat"]["num_clos"])
+    default_cat = configuration_info["l3cat"]["total_cache_ways"]
+    number_of_ways = int(configuration_info["l3cat"]["num_ways"])
+    l3bytes = configuration_info["l3cat"]["cache_bytes"]
+    contention_bitmask = configuration_info["l3cat"]["contention_mask"]
+
+    # Examples:
+    # if contention_bitmask = 0xc0000 then 0x80000 bitmask with be replaced by contention_bitmask
+    # if contention_bitmask = 0x600 then 0x400 bitmask with be replaced by contention_bitmask
+    find_forbidden_mask()
+
+    # execute script "output-maker.py" for pqos output (pqos -r)
+    output_maker.construct_pqos_output()
+
+    for socket_id in range(number_of_sockets):
+        cores_list_per_socket = configuration_info["sockets"][str(socket_id)]
+        cores_list_per_socket = ast.literal_eval(cores_list_per_socket)
+        number_of_cores = len(cores_list_per_socket)
+
+        # initializing each CLOS to default bitmask
+        cos.append([])
+        for clos in range(number_of_cos):
+            cos[socket_id].append(default_cat)
+     
+        cores.append([])
+        coresIDs_in_each_socket.append([])
+
+        # associating all cores to COS0
+        # keeping info about cores IDs of each socket
+        for core in cores_list_per_socket:    
+            cores[socket_id].append(0)
+            coresIDs_in_each_socket[socket_id].append(core)
+
     if os.path.isfile("cos_mask.p"):
         cos = pickle.load(open("cos_mask.p", "rb"))
-    else:
-        cos.append([])
-        cos.append([])
-        for socket in sockets_list:
-            for i in range(0,number_of_cos):
-                cos[socket].append(default_cat)
-
     if os.path.isfile("cos_core.p"):
         cores = pickle.load(open("cos_core.p", "rb"))
-    else:
-        for i in range(0, 2 * number_of_cores):
-            cores.append(0)
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    if (sys.argv[1] == "-r"):
+    if len(sys.argv) < 2 or sys.argv[1] == "-h":
+        print_help_message()
+    elif sys.argv[1] == "-r":
         print_metrics()
-    elif (sys.argv[1] == "-sv"):
-        print_cur_config()
-    elif (sys.argv[1] == "-R"):
+    elif sys.argv[1] == "-sv":
+        print_current_config()
+    elif sys.argv[1] == "-R":
         reset_cos()
-    elif (sys.argv[1] == "-a"):
+    elif sys.argv[1] == "-a":
         change_cos()
-    elif (sys.argv[1] == "-e"):
+    elif sys.argv[1] == "-e":
         change_mask()
-
+    else:
+        print("Unrecognized argument!")
 
 
 if __name__ == "__main__":

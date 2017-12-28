@@ -1,9 +1,0 @@
-./pqos -e "llc:1=0x0001"
-./pqos -e "llc:2=0x00c0;llc:3=0xfff00"
-./pqos -sv
-./pqos -a "llc:1=0"
-./pqos -a "llc:2=1-3"
-./pqos -sv
-./pqos -R
-./pqos -r
-./pqos -a "llc@0:1=1;llc@0:2=2"
